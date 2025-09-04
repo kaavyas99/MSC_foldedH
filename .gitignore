@@ -1,0 +1,3 @@
+*.out
+*/.DS_Store
+src/full_clifford_sim/__pycache__/*
