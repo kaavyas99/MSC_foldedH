@@ -1,8 +1,8 @@
-# Surface code cultivation with a fold
+# Fold-transversal surface code cultivation
 
 (Or, as we wanted to name our work: *Growtation and Foldosynthesis*)
 
-See our upcoming arxiv manuscript for details.
+See our [arxiv manuscript](https://arxiv.org/abs/2509.05212) for details.
 
 `` src `` has code to generate some sample fault-distance 3 $|Y\rangle$-state cultivation circuits. Only stabilizer-based escape is supported for now. Some utility functions in this folder are lifted from the original magic state cultivation [Zenodo repository](https://zenodo.org/records/13777072).
 

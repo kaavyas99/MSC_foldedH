@@ -10,6 +10,7 @@ class FullCircuit:
     dy: int
     glen: int
     basis: str
+    smallsc: bool
 
     def sc_stab_round(self, d_rest: int = None) -> stim.Circuit:
         "Returns gates and ancilla msmts for any stab rd"
@@ -198,5 +199,5 @@ class FullCircuit:
         self.ghzcirc = GHZstate(self.dx, self.dy, self.glen)
         self.qcircuit += self.ghzcirc.layout_ghz_state()
 
-        self.cstage_circ = CultStage(self.dx,self.dy, "Y")
+        self.cstage_circ = CultStage(self.dx,self.dy, "Y", self.smallsc)
         

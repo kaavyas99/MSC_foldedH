@@ -7,9 +7,6 @@ from itertools import chain
 def flatten(xss):
     return [x for xs in xss for x in xs]
 
-def qub_toleft(q:int) -> int:
-        return q - 2
-
 #functions that use sv coords
     # Converts the JSON indices to stim indices.
     # keys: statevector indices. entries: stim coordinates in (x,y)
@@ -40,18 +37,37 @@ class CultStage:
     dx: int
     dy: int
     basis: str
+    smallsc: bool
 
+    #support ps on rot(3)
     def qub_topleft(self,q:int) -> int:
-            return q - 2*self.dx - 2
+            if not self.smallsc:
+                return q - 2*self.dx - 2
+            else:
+                assert q % 2 == 1, "q not ancilla"
+                return ((q // 2 // (self.dx+1))-1) * 2* self.dx + 2*((q//2) % (self.dx+1)) -2
         
     def qub_bottomleft(self,q:int) -> int:
-        return q + 2*self.dx - 2
+        if not self.smallsc:
+            return q + 2*self.dx - 2
+        else:
+            assert q % 2 == 1, "q not ancilla"
+            return (q // 2 // (self.dx+1)) * 2* self.dx + 2*((q//2) % (self.dx+1)) -2
     
     def qub_topright(self,q:int) -> int:
-        return q - 2*self.dx + 2
+        if not self.smallsc:
+            return q - 2*self.dx + 2
+        else:
+            assert q % 2 == 1, "q not ancilla"
+            return ((q // 2 // (self.dx+1))-1) * 2* self.dx + 2*((q//2) % (self.dx+1))
 
     def qub_bottomright(self,q:int) -> int:
-        return q + 2*self.dx + 2
+        if not self.smallsc:
+            return q + 2*self.dx + 2
+        else:
+            assert q % 2 == 1, "q not ancilla"
+            return (q // 2 // (self.dx+1)) * 2* self.dx + 2*((q//2) % (self.dx+1))
+        
     
     def qub_above(self, q:int) -> int:
             return q - 2*self.dx
@@ -191,7 +207,7 @@ class CultStage:
             print('WARNING: skip_gauge_fix==True')
 
         hi_circ = stim.Circuit()
-        bdry_ancillas = np.array([6, 2 * self.dx, 6 * self.dx + 8, 8 * self.dx + 2])
+        bdry_ancillas = self.bdry_ancillas
 
         hi_circ.append("R", self.mgrid_qubs)
         hi_circ.append("R", self.agrid_qubs)
@@ -208,28 +224,48 @@ class CultStage:
         
         step1gatesCX = flatten([[q,self.qub_topleft(q)] for q in self.agrid_qubs[[0,3]]])
         step1gatesCX += flatten([[self.qub_topleft(q),q] for q in self.agrid_qubs[[1,2]]])
-        step1gatesCX += [bdry_ancillas[2] - 2*self.dx, bdry_ancillas[2], bdry_ancillas[3], bdry_ancillas[3]-2]
+        if not self.smallsc:
+            step1gatesCX += [bdry_ancillas[2] - 2*self.dx, 
+                             bdry_ancillas[2], bdry_ancillas[3], bdry_ancillas[3]-2]
+        else:
+            step1gatesCX += [self.qub_topleft(bdry_ancillas[2]),
+                              bdry_ancillas[2], bdry_ancillas[3], self.qub_topleft(bdry_ancillas[3])]
         hi_circ.append("CX", step1gatesCX)
         hi_circ.append("TICK")
 
         step2gatesCX = flatten([[q,self.qub_topright(q)] for q in self.agrid_qubs[[0,3]]])
         step2gatesCX += flatten([[self.qub_topright(q),q] for q in self.agrid_qubs[[1, 2]]])  ## add anc2 here
-        step2gatesCX += [bdry_ancillas[3], bdry_ancillas[3] + 2, bdry_ancillas[2] + 2*self.dx, bdry_ancillas[2]]
+        if not self.smallsc:
+            step2gatesCX += [bdry_ancillas[3], bdry_ancillas[3] + 2, 
+                             bdry_ancillas[2] + 2*self.dx, bdry_ancillas[2]]
+        else:
+            step2gatesCX += [bdry_ancillas[3], self.qub_topright(bdry_ancillas[3]),
+                              self.qub_bottomleft(bdry_ancillas[2]), bdry_ancillas[2]]
         hi_circ.append("CX", step2gatesCX)
         hi_circ.append("TICK")
-        hi_circ.append("S", 2*self.dx+6)
+        hi_circ.append("S", 2*self.dx+6 + int(self.smallsc))
         hi_circ.append("TICK")
 
         step3gatesCX = flatten([[q,self.qub_bottomleft(q)] for q in self.agrid_qubs[[0,3]]])
-        step3gatesCX += flatten([[self.qub_bottomleft(q),q] for q in self.agrid_qubs[[1,2]]])  ## change direction, PK250620
-        step3gatesCX += [bdry_ancillas[0], bdry_ancillas[0] - 2, bdry_ancillas[1] - 2*self.dx, bdry_ancillas[1]]
+        step3gatesCX += flatten([[self.qub_bottomleft(q),q] for q in self.agrid_qubs[[1,2]]])  ## change direction
+        if not self.smallsc:
+            step3gatesCX += [bdry_ancillas[0], bdry_ancillas[0] - 2, 
+                             bdry_ancillas[1] - 2*self.dx, bdry_ancillas[1]]
+        else:
+            step3gatesCX += [bdry_ancillas[0], self.qub_bottomleft(bdry_ancillas[0]), 
+                             self.qub_topright(bdry_ancillas[1]), bdry_ancillas[1]]
         hi_circ.append("CX", step3gatesCX)
         hi_circ.append("TICK")
 
 
         step4gatesCX = flatten([[q,self.qub_bottomright(q)] for q in self.agrid_qubs[[0,3]]])
         step4gatesCX += flatten([[self.qub_bottomright(q),q] for q in self.agrid_qubs[[1,2]]])
-        step4gatesCX += [bdry_ancillas[0], bdry_ancillas[0]+ 2, bdry_ancillas[1] + 2*self.dx, bdry_ancillas[1]]
+        if not self.smallsc:
+            step4gatesCX += [bdry_ancillas[0], bdry_ancillas[0]+ 2, 
+                             bdry_ancillas[1] + 2*self.dx, bdry_ancillas[1]]
+        else:
+            step4gatesCX += [bdry_ancillas[0], self.qub_bottomright(bdry_ancillas[0]), 
+                             self.qub_bottomright(bdry_ancillas[1]), bdry_ancillas[1]]
         hi_circ.append("CX", step4gatesCX)
         hi_circ.append("TICK")
 
@@ -251,9 +287,9 @@ class CultStage:
 
         #fast feedback and reset
         if not skip_gauge_fix:
-            hi_circ += stim.Circuit(f"CX rec[-2] {8*self.dx+8}")
-            hi_circ += stim.Circuit(f"CX rec[-6] {8*self.dx}")
-            hi_circ += stim.Circuit(f"CX rec[-7] {4*self.dx+8} rec[-7] {8*self.dx+8}") ## This is the right gauge op, PK250620
+            hi_circ += stim.Circuit(f"CX rec[-2] {(4*self.dx+4) * (2 - int(self.smallsc))}")
+            hi_circ += stim.Circuit(f"CX rec[-6] {(4*self.dx) * (2 - int(self.smallsc))}")
+            hi_circ += stim.Circuit(f"CX rec[-7] {(2*self.dx+4) * (2 - int(self.smallsc))} rec[-7] {(4*self.dx+4) * (2 - int(self.smallsc))}") ## This is the right gauge op, PK250620
             hi_circ += stim.Circuit(f"CZ rec[-8] 0")
             hi_circ.append("TICK")
 
@@ -265,15 +301,24 @@ class CultStage:
         "do stab meas at rot 3 and then grow to reg 3"
 
         hi_circ = stim.Circuit()
-        bdry_ancillas = np.array([6, 2 * self.dx, 6 * self.dx + 8, 8 * self.dx + 2])
+        bdry_ancillas = self.bdry_ancillas
         
         step1gatesCX = flatten([[q,self.qub_topleft(q)] for q in self.agrid_qubs[[0,3]]])
         step1gatesCX += flatten([[self.qub_topleft(q),q] for q in self.agrid_qubs[[1,2]]])
-        step1gatesCX += [bdry_ancillas[2] - 2*self.dx, bdry_ancillas[2], bdry_ancillas[3], bdry_ancillas[3]-2]
+        if not self.smallsc:
+            step1gatesCX += [bdry_ancillas[2] - 2*self.dx, bdry_ancillas[2], bdry_ancillas[3], bdry_ancillas[3]-2]
+        else:
+            step1gatesCX += [self.qub_topleft(bdry_ancillas[2]), bdry_ancillas[2], 
+                             bdry_ancillas[3], self.qub_topleft(bdry_ancillas[3])]
+
 
         step4gatesCX = flatten([[q,self.qub_bottomright(q)] for q in self.agrid_qubs[[0,3]]])
         step4gatesCX += flatten([[self.qub_bottomright(q),q] for q in self.agrid_qubs[[1,2]]])
-        step4gatesCX += [bdry_ancillas[0], bdry_ancillas[0]+ 2, bdry_ancillas[1] + 2*self.dx, bdry_ancillas[1]]
+        if not self.smallsc:
+            step4gatesCX += [bdry_ancillas[0], bdry_ancillas[0]+ 2, bdry_ancillas[1] + 2*self.dx, bdry_ancillas[1]]
+        else:
+            step4gatesCX += [bdry_ancillas[0], self.qub_bottomright(bdry_ancillas[0]), 
+                             self.qub_bottomright(bdry_ancillas[1]), bdry_ancillas[1]]
 
         ##hi_circ.append("I", self.mgrid_qubs) can be done simul
         hi_circ.append("R", self.agrid_qubs)
@@ -290,7 +335,13 @@ class CultStage:
 
         step2gatesCX = flatten([[q,self.qub_topright(q)] for q in self.agrid_qubs[[0,3]]])
         step2gatesCX += flatten([[self.qub_bottomleft(q),q] for q in self.agrid_qubs[[1,2]]])
-        step2gatesCX += [bdry_ancillas[3], bdry_ancillas[3] + 2, bdry_ancillas[2] + 2*self.dx, bdry_ancillas[2]]
+        if not self.smallsc:
+            step2gatesCX += [bdry_ancillas[3], bdry_ancillas[3] + 2, bdry_ancillas[2] + 2*self.dx, bdry_ancillas[2]]
+        else:
+            step2gatesCX += [bdry_ancillas[3], self.qub_topright(bdry_ancillas[3]), 
+                             self.qub_bottomleft(bdry_ancillas[2]), bdry_ancillas[2]]
+        
+
         hi_circ.append("CX", step2gatesCX)
         hi_circ.append("TICK")
 
@@ -298,12 +349,18 @@ class CultStage:
             hi_circ = stim.Circuit()
             hi_circ.append("R", bdry_ancillas)
             hi_circ.append("TICK")
-            hi_circ.append("H", [6, 8 * self.dx + 2])
+            hi_circ.append("H", [bdry_ancillas[0], bdry_ancillas[3]])
             hi_circ.append("TICK")
 
         step3gatesCX = flatten([[q,self.qub_bottomleft(q)] for q in self.agrid_qubs[[0,3]]])
         step3gatesCX += flatten([[self.qub_topright(q),q] for q in self.agrid_qubs[[1,2]]])
-        step3gatesCX += [bdry_ancillas[0], bdry_ancillas[0] - 2, bdry_ancillas[1] - 2*self.dx, bdry_ancillas[1]]
+        if not self.smallsc:
+            step3gatesCX += [bdry_ancillas[0], bdry_ancillas[0] - 2, bdry_ancillas[1] - 2*self.dx, bdry_ancillas[1]]
+        else:
+            step3gatesCX += [bdry_ancillas[0], self.qub_bottomleft(bdry_ancillas[0]), 
+                             self.qub_topright(bdry_ancillas[1]), bdry_ancillas[1]]
+        
+
         hi_circ.append("CX", step3gatesCX)
         hi_circ.append("TICK")
 
@@ -331,6 +388,7 @@ class CultStage:
 
     def d3_modrotmeas(self) -> stim.Circuit:
         "do SOME stab meas at rot 3, dictated by uprep circ . turns out only need 3 for optimal uprep"
+        assert not self.smallsc, "Optimized unitary encoding not supported for ps at Rot(3)"
 
         hi_circ = stim.Circuit()
 
@@ -388,7 +446,7 @@ class CultStage:
 
         #next two steps
         smcirc.append("CNOT", flatten([[self.qub_toright(q), q] for q in self.mgrid_qubs[[0,3,6,1,4,7]] ]))
-        smcirc.append("CNOT", flatten([[q, qub_toleft(q)] for q in self.agrid_qubs ]))
+        smcirc.append("CNOT", flatten([[q, self.qub_toleft(q)] for q in self.agrid_qubs ]))
         smcirc.append("TICK")
 
         smcirc.append("CNOT", flatten([[q, self.qub_above(q)] for q in self.mgrid_qubs[3:] ]))
@@ -542,12 +600,27 @@ class CultStage:
         return unitary_encoder
     
     def __post_init__(self):
-        mainqubs = [ row * 4 * self.dx + 4 * col 
+        "initialize arrays of reg3 "
+
+        multf = 2 - int(self.smallsc)
+        mainqubs = [ row * 2 * multf * self.dx + 2 * multf * col 
                     for row in range(3) for col in range(3)]
         
-        altqubs = [4 * self.dx * (row) + 2*self.dx + 2 + 4 * col 
+        if not self.smallsc:
+            altqubs = [4 * self.dx * (row) + 2*self.dx + 2 + 4 * col 
                    for row in range(2) for col in range(2)]
+        else:
+            altqubs = [2 * (self.dx+1) * (row) + 2*(self.dx+1) + 3 + 2 * col 
+                   for row in range(2) for col in range(2)]
+            
+        if not self.smallsc:
+            bdry_as = np.array([6, 2 * self.dx, 6 * self.dx + 8, 8 * self.dx + 2])
+        else:
+            bdry_as = np.array([5, 2 * (self.dx +1) + 1, 4 * (self.dx +1) + 7, 6 * (self.dx +1) + 3])
         
         self.mgrid_qubs = np.array(mainqubs)
         self.agrid_qubs = np.array(altqubs)
+        self.bdry_ancillas = np.array(bdry_as)
+
+
     

@@ -21,7 +21,8 @@ def full_circuit(nm: float,
     rsc = FullCircuit(dx=dfinal,
                     dy=dfinal ,
                     glen=ghz_size, 
-                    basis="Y")
+                    basis="Y",
+                    smallsc=(ps_on_d3==2))
     
     #component_array [0:unitary prep, 1:ghz_prep+dec, 2:cbasis_check, \
     # 3:uni_grow, 4:d5_stab, 5:final_growth]
@@ -119,7 +120,7 @@ def full_circuit(nm: float,
     #add logical msmt
     if not handoff:
         rsc.qcircuit += rsc.logYMeas()
-        print(len(rsc.qcircuit.shortest_graphlike_error()))
+        print("Shortest graphlike error length:",len(rsc.qcircuit.shortest_graphlike_error()))
     else:
         #add logical msmt (stim 1.15)
         z_targs = [2*i for i in range(0,rsc.dx)]

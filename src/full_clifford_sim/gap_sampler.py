@@ -157,7 +157,8 @@ class CompiledPymatchingGapSampler(sinter.CompiledSampler):
         gaps_db = np.round(gaps * self.decibels_per_w).astype(dtype=np.int64)
         for k in range(num_kept_shots):
             g = gaps_db[k]
-            e = 'IXZY'[errors[k]]
+            #e = 'IXZY'[errors[k]] #rn if this line is chosen then all errors are reported as X
+            e = 'CE'[errors[k]]
             key = f'{e}{g}'
             custom_counts[key] += 1
         t1 = time.monotonic()

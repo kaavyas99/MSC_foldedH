@@ -1,0 +1,5 @@
+numpy==1.26.4
+pymatching==2.2.1
+sinter==1.15.0
+stim==1.15.0
+json==2.0.9
